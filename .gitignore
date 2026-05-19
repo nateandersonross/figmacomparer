@@ -1,0 +1,8 @@
+node_modules
+.next
+out
+.env
+.env.local
+public/comparisons
+*.log
+.DS_Store

@@ -1,0 +1,137 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.region {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.type {
+  --c: var(--accent);
+}
+
+.space {
+  --c: var(--warning);
+}
+
+.image {
+  --c: var(--error);
+}
+
+.region:hover {
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+  border-color: color-mix(in srgb, var(--c) 50%, transparent);
+}
+
+.active {
+  background: color-mix(in srgb, var(--c) 22%, transparent) !important;
+  border-color: var(--c) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 35%, transparent);
+  z-index: 5;
+}
+
+.pin {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  z-index: 2;
+}
+
+.tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  min-width: 180px;
+  max-width: 260px;
+  padding: 0.6rem 0.75rem;
+  background: #1a1a22;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--text);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 10;
+  transition: opacity 0.15s;
+}
+
+.withPin:hover .tooltip,
+.tooltipVisible {
+  opacity: 1;
+}
+
+.tooltipCategory {
+  display: block;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.tooltip strong {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.15rem;
+}
+
+.tooltipName {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.tooltipRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.tooltipRow span {
+  color: var(--muted);
+}
+
+.tooltipRow code {
+  font-family: var(--mono);
+}
+
+.tooltipDelta {
+  display: inline-block;
+  margin-top: 0.4rem;
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--error);
+}
+
+.figmaLabel {
+  position: absolute;
+  top: -1.5rem;
+  left: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--c);
+  color: #fff;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  z-index: 6;
+}

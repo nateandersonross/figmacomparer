@@ -1,0 +1,1 @@
+export const DESKTOP_DEFAULT_WIDTH = 1440;
