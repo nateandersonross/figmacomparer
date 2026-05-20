@@ -3,6 +3,7 @@ import { getFrameBox } from "@/lib/figma/extract-layout";
 import type { InspectableElement, InspectMetrics } from "@/lib/types/inspect";
 
 const MIN_SIZE = 4;
+const MIN_ELEMENT_SIZE = 8;
 const MAX_DEPTH = 20;
 const SECTION_TYPES = new Set([
   "FRAME",
@@ -12,17 +13,27 @@ const SECTION_TYPES = new Set([
   "SECTION",
   "COMPONENT_SET",
 ]);
+const SKIP_INNER_TYPES = new Set(["DOCUMENT", "CANVAS", "PAGE"]);
 
 function px(n: number | undefined | null): string {
   return `${Math.round(n ?? 0)}px`;
 }
 
-function kindFor(node: FigmaNode): InspectableElement["kind"] {
-  if (node.type === "TEXT") return "text";
+function isImageNode(node: FigmaNode): boolean {
   const hasImage = node.fills?.some((f) => f.type === "IMAGE");
-  if (hasImage || /image|photo|hero|banner|thumb/i.test(node.name)) return "image";
-  if (SECTION_TYPES.has(node.type)) return "section";
-  return "element";
+  return Boolean(hasImage) || /image|photo|hero|banner|thumb|logo|icon/i.test(node.name);
+}
+
+/**
+ * Matches WordPress-style block names like `NPP-HR001`, `NPP_TXT002`, `npp-log001`, etc.
+ * Returns the normalized key (e.g. `npp-hr001`) or null.
+ */
+const NPP_NAME_RE = /\b(npp[-_][a-z]{2,5}\d{2,4})\b/i;
+export function nppSectionKey(name: string | undefined | null): string | null {
+  if (!name) return null;
+  const match = NPP_NAME_RE.exec(name);
+  if (!match) return null;
+  return match[1].toLowerCase().replace(/_/g, "-");
 }
 
 type Typography = {
@@ -103,50 +114,145 @@ function metricsFor(node: FigmaNode): InspectMetrics {
   return metrics;
 }
 
-/** Walk Figma frame tree into click-to-inspect elements (frame-local coordinates). */
-export function extractInspectableFromFigma(root: FigmaNode): InspectableElement[] {
-  const frame = getFrameBox(root);
-  const items: InspectableElement[] = [];
+/** Unwrap single-child GROUP/FRAME chains that span ~the full artboard (common Figma pattern). */
+function effectiveSectionChildren(artboard: FigmaNode): FigmaNode[] {
+  const artBox = artboard.absoluteBoundingBox;
+  if (!artBox) return [];
+
+  let layer: FigmaNode = artboard;
+  for (let guard = 0; guard < 8; guard++) {
+    const kids = layer.children ?? [];
+    if (kids.length !== 1) break;
+    const only = kids[0];
+    if (!SECTION_TYPES.has(only.type)) break;
+    const box = only.absoluteBoundingBox;
+    if (!box) break;
+    const wRatio = box.width / artBox.width;
+    const hRatio = box.height / artBox.height;
+    if (wRatio < 0.82 || hRatio < 0.82) break;
+    layer = only;
+  }
+
+  return (layer.children ?? []).filter((c) => SECTION_TYPES.has(c.type));
+}
+
+function makeItem(
+  node: FigmaNode,
+  kind: InspectableElement["kind"],
+  frame: { x: number; y: number }
+): InspectableElement | null {
+  const box = node.absoluteBoundingBox;
+  if (!box || box.width < MIN_SIZE || box.height < MIN_SIZE) return null;
+
+  const key = nppSectionKey(node.name);
+  const label = key ?? node.name;
+
+  return {
+    id: `figma_${node.id}`,
+    kind,
+    label,
+    tag: node.type,
+    rect: {
+      top: Math.round(box.y - frame.y),
+      left: Math.round(box.x - frame.x),
+      width: Math.round(box.width),
+      height: Math.round(box.height),
+    },
+    metrics: metricsFor(node),
+  };
+}
+
+/** Walk the tree and return every node whose name matches the NPP-xxx pattern. */
+function findNppSections(root: FigmaNode): FigmaNode[] {
+  const found: FigmaNode[] = [];
 
   function walk(node: FigmaNode, depth: number) {
     if (depth > MAX_DEPTH) return;
-    const box = node.absoluteBoundingBox;
-    const tooSmall = !box || box.width < MIN_SIZE || box.height < MIN_SIZE;
-    const isText = node.type === "TEXT";
-
-    if (!tooSmall && node.id !== root.id) {
-      const rect = {
-        top: Math.round(box!.y - frame.y),
-        left: Math.round(box!.x - frame.x),
-        width: Math.round(box!.width),
-        height: Math.round(box!.height),
-      };
-
-      items.push({
-        id: `figma_${node.id}`,
-        kind: kindFor(node),
-        label: node.name,
-        tag: node.type,
-        rect,
-        metrics: metricsFor(node),
-      });
+    if (node.id !== root.id && nppSectionKey(node.name)) {
+      found.push(node);
+      return;
     }
-
-    if (isText) return;
     for (const child of node.children ?? []) walk(child, depth + 1);
   }
 
   walk(root, 0);
+  return found;
+}
 
-  const sorted = items.sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const cur = sorted[i];
-    const next = sorted[i + 1];
+/**
+ * Walk Figma frame tree into click-to-inspect elements (frame-local coordinates).
+ *
+ * Rules:
+ * - SECTIONS: prefer nodes whose name matches `NPP-xxx` at any depth — these align
+ *   with WordPress block classes like `block_NPP-HR001`. Falls back to one-layer-deep
+ *   children (after unwrapping full-size wrappers) when no NPP nodes are found.
+ * - TEXT and IMAGE elements: included from any depth (for typography/size inspection).
+ * - Intermediate container nodes are skipped so hit-testing stays clean.
+ */
+export function extractInspectableFromFigma(root: FigmaNode): InspectableElement[] {
+  const frame = getFrameBox(root);
+  const items: InspectableElement[] = [];
+
+  function collectInner(node: FigmaNode, depth: number) {
+    if (depth > MAX_DEPTH) return;
+    if (SKIP_INNER_TYPES.has(node.type)) {
+      for (const child of node.children ?? []) collectInner(child, depth + 1);
+      return;
+    }
+
+    const box = node.absoluteBoundingBox;
+
+    if (node.type === "TEXT") {
+      const item = makeItem(node, "text", frame);
+      if (item) items.push(item);
+      return;
+    }
+
+    if (isImageNode(node)) {
+      const item = makeItem(node, "image", frame);
+      if (item) items.push(item);
+    } else if (
+      box &&
+      box.width >= MIN_ELEMENT_SIZE &&
+      box.height >= MIN_ELEMENT_SIZE
+    ) {
+      const item = makeItem(node, "element", frame);
+      if (item) items.push(item);
+    }
+
+    for (const child of node.children ?? []) collectInner(child, depth + 1);
+  }
+
+  let sectionRoots = findNppSections(root);
+
+  if (sectionRoots.length === 0) {
+    sectionRoots = effectiveSectionChildren(root);
+  }
+
+  if (sectionRoots.length === 0) {
+    sectionRoots = (root.children ?? []).filter((c) => SECTION_TYPES.has(c.type));
+  }
+
+  for (const child of sectionRoots) {
+    const section = makeItem(child, "section", frame);
+    if (section) items.push(section);
+
+    for (const grand of child.children ?? []) collectInner(grand, 1);
+  }
+
+  const sections = items
+    .filter((i) => i.kind === "section")
+    .sort((a, b) => a.rect.top - b.rect.top);
+
+  for (let i = 0; i < sections.length - 1; i++) {
+    const cur = sections[i];
+    const next = sections[i + 1];
     const curBottom = cur.rect.top + cur.rect.height;
     if (next.rect.top >= curBottom - 2) {
       cur.metrics.gapAfter = Math.round(next.rect.top - curBottom);
     }
   }
 
+  const sorted = items.sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
   return sorted.slice(0, 600);
 }

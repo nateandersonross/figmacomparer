@@ -1,3 +1,6 @@
+import type { Cookie } from "playwright";
+import type { SiteAuthConfig } from "@/lib/capture/auth";
+
 export type CaptureOptions = {
   /** BCP 47 locale, e.g. en-US */
   locale?: string;
@@ -15,6 +18,10 @@ export type CaptureOptions = {
    * Use when the nav is visible but shouldn't affect match %.
    */
   ignoreDiffTopPx?: number;
+  /** Session cookies from WordPress login or pasted browser cookies */
+  authCookies?: Cookie[];
+  /** HTTP Basic Auth for staging gates */
+  siteAuth?: SiteAuthConfig;
 };
 
 export const DEFAULT_CAPTURE_OPTIONS: Required<

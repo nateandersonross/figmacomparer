@@ -1,0 +1,230 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, #000 65%, transparent);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: fade 0.15s ease-out;
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  width: min(560px, 100%);
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  animation: pop 0.15s ease-out;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.headerMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.statusOpen,
+.statusResolved {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+}
+
+.statusOpen {
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
+  color: var(--warning);
+}
+
+.statusResolved {
+  background: color-mix(in srgb, var(--success) 22%, transparent);
+  color: var(--success);
+}
+
+.category,
+.breakpoint {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.breakpoint::before {
+  content: "·";
+  margin-right: 0.5rem;
+  color: var(--border);
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+}
+
+.closeBtn:hover {
+  color: var(--text);
+}
+
+.body {
+  padding: 1rem 1.25rem;
+}
+
+.elementLabel {
+  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+  word-break: break-word;
+}
+
+.elementKind {
+  margin: 0 0 1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.elementKind code {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  background: var(--surface-2);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem 1rem;
+  margin: 0;
+}
+
+.field,
+.fieldFull {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.fieldFull {
+  grid-column: 1 / -1;
+}
+
+.field dt,
+.fieldFull dt {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+}
+
+.field dd,
+.fieldFull dd {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.field code,
+.fieldFull code {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+
+.notes {
+  margin: 0;
+  white-space: pre-wrap;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.85rem 1.25rem 1rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.deleteBtn,
+.resolveBtn,
+.reopenBtn {
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.deleteBtn {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 35%, var(--border));
+}
+
+.deleteBtn:hover {
+  background: color-mix(in srgb, var(--error) 12%, var(--surface));
+}
+
+.resolveBtn {
+  background: var(--success);
+  border-color: var(--success);
+  color: #0a0a0a;
+}
+
+.resolveBtn:hover {
+  filter: brightness(1.08);
+}
+
+.reopenBtn {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
+}
+
+.reopenBtn:hover {
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}

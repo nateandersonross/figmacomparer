@@ -2,9 +2,168 @@
 
 import { useEffect, useRef, useState } from "react";
 import { InspectWorkbench } from "@/components/InspectWorkbench";
+import type { SiteAuthConfig } from "@/lib/capture/auth";
 import { formatApiError, loadFormPrefs, saveFormPrefs } from "@/lib/form-storage";
 import type { InspectionSession } from "@/lib/types/inspect";
 import styles from "./page.module.css";
+
+type SiteAuthMode = "none" | "wordpress" | "basic" | "cookies";
+
+function SiteAuthFields({
+  authMode,
+  setAuthMode,
+  wpUsername,
+  setWpUsername,
+  wpPassword,
+  setWpPassword,
+  wpLoginUrl,
+  setWpLoginUrl,
+  basicUsername,
+  setBasicUsername,
+  basicPassword,
+  setBasicPassword,
+  authCookies,
+  setAuthCookies,
+}: {
+  authMode: SiteAuthMode;
+  setAuthMode: (v: SiteAuthMode) => void;
+  wpUsername: string;
+  setWpUsername: (v: string) => void;
+  wpPassword: string;
+  setWpPassword: (v: string) => void;
+  wpLoginUrl: string;
+  setWpLoginUrl: (v: string) => void;
+  basicUsername: string;
+  setBasicUsername: (v: string) => void;
+  basicPassword: string;
+  setBasicPassword: (v: string) => void;
+  authCookies: string;
+  setAuthCookies: (v: string) => void;
+}) {
+  return (
+    <div className={styles.authBlock}>
+      <h3>Draft / protected page access</h3>
+      <p className={styles.urlHint}>
+        For WordPress <strong>drafts</strong>, paste the preview URL from the editor
+        (Preview → copy link). It usually includes <code>?preview=true</code>. Then
+        choose how Playwright should authenticate.
+      </p>
+      <label>
+        Authentication
+        <select
+          value={authMode}
+          onChange={(e) => setAuthMode(e.target.value as SiteAuthMode)}
+        >
+          <option value="none">None (public or preview link only)</option>
+          <option value="wordpress">WordPress login</option>
+          <option value="basic">HTTP Basic (staging gate)</option>
+          <option value="cookies">Browser cookies (paste)</option>
+        </select>
+      </label>
+
+      {authMode === "wordpress" && (
+        <>
+          <label>
+            WP username or email
+            <input
+              type="text"
+              value={wpUsername}
+              onChange={(e) => setWpUsername(e.target.value)}
+              autoComplete="username"
+            />
+          </label>
+          <label>
+            WP password
+            <input
+              type="password"
+              value={wpPassword}
+              onChange={(e) => setWpPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </label>
+          <label>
+            Login URL (optional)
+            <input
+              type="url"
+              value={wpLoginUrl}
+              onChange={(e) => setWpLoginUrl(e.target.value)}
+              placeholder="https://yoursite.com/wp-login.php"
+            />
+          </label>
+        </>
+      )}
+
+      {authMode === "basic" && (
+        <>
+          <label>
+            Basic auth username
+            <input
+              value={basicUsername}
+              onChange={(e) => setBasicUsername(e.target.value)}
+            />
+          </label>
+          <label>
+            Basic auth password
+            <input
+              type="password"
+              value={basicPassword}
+              onChange={(e) => setBasicPassword(e.target.value)}
+            />
+          </label>
+        </>
+      )}
+
+      {authMode === "cookies" && (
+        <label>
+          Cookies
+          <textarea
+            rows={4}
+            value={authCookies}
+            onChange={(e) => setAuthCookies(e.target.value)}
+            placeholder='JSON from DevTools, or: wordpress_logged_in_xxx=...; wordpress_sec_xxx=...'
+            className={styles.cookieInput}
+          />
+        </label>
+      )}
+    </div>
+  );
+}
+
+function buildSiteAuth(
+  authMode: SiteAuthMode,
+  wpUsername: string,
+  wpPassword: string,
+  wpLoginUrl: string,
+  basicUsername: string,
+  basicPassword: string,
+  authCookies: string
+): SiteAuthConfig | undefined {
+  if (authMode === "none") return undefined;
+
+  const auth: SiteAuthConfig = {};
+
+  if (authMode === "wordpress" && wpUsername.trim() && wpPassword) {
+    auth.wordpress = {
+      username: wpUsername.trim(),
+      password: wpPassword,
+      loginUrl: wpLoginUrl.trim() || undefined,
+    };
+  }
+
+  if (authMode === "basic" && basicUsername.trim() && basicPassword) {
+    auth.httpBasic = {
+      username: basicUsername.trim(),
+      password: basicPassword,
+    };
+  }
+
+  if (authMode === "cookies" && authCookies.trim()) {
+    auth.cookies = authCookies.trim();
+  }
+
+  if (!auth.wordpress && !auth.httpBasic && !auth.cookies) return undefined;
+  return auth;
+}
 
 function AdjustmentsFields({
   title,
@@ -59,6 +218,13 @@ export default function HomePage() {
   const [desktopCropTop, setDesktopCropTop] = useState("");
   const [rememberSettings, setRememberSettings] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [siteAuthMode, setSiteAuthMode] = useState<SiteAuthMode>("none");
+  const [wpUsername, setWpUsername] = useState("");
+  const [wpPassword, setWpPassword] = useState("");
+  const [wpLoginUrl, setWpLoginUrl] = useState("");
+  const [basicUsername, setBasicUsername] = useState("");
+  const [basicPassword, setBasicPassword] = useState("");
+  const [authCookies, setAuthCookies] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<InspectionSession | null>(null);
@@ -74,6 +240,13 @@ export default function HomePage() {
     if (saved.mobileCropTop) setMobileCropTop(saved.mobileCropTop);
     if (saved.desktopHideSelectors) setDesktopHideSelectors(saved.desktopHideSelectors);
     if (saved.desktopCropTop) setDesktopCropTop(saved.desktopCropTop);
+    if (saved.siteAuthMode) setSiteAuthMode(saved.siteAuthMode as SiteAuthMode);
+    if (saved.wpUsername) setWpUsername(saved.wpUsername);
+    if (saved.wpPassword) setWpPassword(saved.wpPassword);
+    if (saved.wpLoginUrl) setWpLoginUrl(saved.wpLoginUrl);
+    if (saved.basicUsername) setBasicUsername(saved.basicUsername);
+    if (saved.basicPassword) setBasicPassword(saved.basicPassword);
+    if (saved.authCookies) setAuthCookies(saved.authCookies);
     prefsLoaded.current = true;
   }, []);
 
@@ -89,6 +262,13 @@ export default function HomePage() {
       mobileCropTop,
       desktopHideSelectors,
       desktopCropTop,
+      siteAuthMode,
+      wpUsername,
+      wpPassword: rememberSettings ? wpPassword : undefined,
+      wpLoginUrl,
+      basicUsername,
+      basicPassword: rememberSettings ? basicPassword : undefined,
+      authCookies,
     });
   }, [
     rememberSettings,
@@ -101,6 +281,13 @@ export default function HomePage() {
     mobileCropTop,
     desktopHideSelectors,
     desktopCropTop,
+    siteAuthMode,
+    wpUsername,
+    wpPassword,
+    wpLoginUrl,
+    basicUsername,
+    basicPassword,
+    authCookies,
   ]);
 
   function buildAdjustments(hide: string, crop: string) {
@@ -131,6 +318,15 @@ export default function HomePage() {
           timezoneId: "America/New_York",
           mobileAdjustments: buildAdjustments(mobileHideSelectors, mobileCropTop),
           desktopAdjustments: buildAdjustments(desktopHideSelectors, desktopCropTop),
+          siteAuth: buildSiteAuth(
+            siteAuthMode,
+            wpUsername,
+            wpPassword,
+            wpLoginUrl,
+            basicUsername,
+            basicPassword,
+            authCookies
+          ),
         }),
       });
 
@@ -225,6 +421,22 @@ export default function HomePage() {
                 required
               />
             </label>
+            <SiteAuthFields
+              authMode={siteAuthMode}
+              setAuthMode={setSiteAuthMode}
+              wpUsername={wpUsername}
+              setWpUsername={setWpUsername}
+              wpPassword={wpPassword}
+              setWpPassword={setWpPassword}
+              wpLoginUrl={wpLoginUrl}
+              setWpLoginUrl={setWpLoginUrl}
+              basicUsername={basicUsername}
+              setBasicUsername={setBasicUsername}
+              basicPassword={basicPassword}
+              setBasicPassword={setBasicPassword}
+              authCookies={authCookies}
+              setAuthCookies={setAuthCookies}
+            />
           </section>
 
           <section className={styles.formAdvanced}>

@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { cropImage } from "@/lib/capture/image-adjust";
 import { sampleInspectableElements, type InspectSample } from "@/lib/capture/inspect-sample";
 import { samplePageLayout, type LayoutSample } from "@/lib/capture/layout-sample";
+import { authToContextOptions, applyAuthToContext } from "@/lib/capture/auth";
 import {
   DEFAULT_CAPTURE_OPTIONS,
   type CaptureOptions,
@@ -38,6 +39,7 @@ function buildContextOptions(
     extraHTTPHeaders: {
       "Accept-Language": acceptLanguage,
     },
+    ...authToContextOptions(options.siteAuth),
   };
 }
 
@@ -103,6 +105,7 @@ export async function captureForInspect(
   options: CaptureOptions = {}
 ): Promise<InspectCapture> {
   const context = await browser.newContext(buildContextOptions(width, height, options));
+  await applyAuthToContext(context, url, options);
   const page = await context.newPage();
 
   try {
@@ -127,6 +130,7 @@ export async function capturePage(
   options: CaptureOptions = {}
 ): Promise<PageCapture> {
   const context = await browser.newContext(buildContextOptions(width, height, options));
+  await applyAuthToContext(context, url, options);
   const page = await context.newPage();
 
   try {

@@ -550,3 +550,56 @@
   padding: 0.55rem 0.65rem;
   color: var(--text);
 }
+
+.urlHint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.urlHint code {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  background: var(--surface-2);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+}
+
+.authBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 0.25rem;
+}
+
+.authBlock h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.authBlock select,
+.authBlock input[type="text"],
+.authBlock input[type="url"],
+.authBlock input[type="password"] {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  color: var(--text);
+}
+
+.cookieInput {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  resize: vertical;
+  min-height: 4rem;
+}

@@ -10,6 +10,14 @@ export type SavedFormPrefs = {
   mobileCropTop?: string;
   desktopHideSelectors?: string;
   desktopCropTop?: string;
+  /** none | wordpress | basic | cookies */
+  siteAuthMode?: string;
+  wpUsername?: string;
+  wpPassword?: string;
+  wpLoginUrl?: string;
+  basicUsername?: string;
+  basicPassword?: string;
+  authCookies?: string;
 };
 
 export function loadFormPrefs(): SavedFormPrefs {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { parseAdjustmentsInput } from "@/lib/capture/adjustments";
+import { getIssuesForUrl } from "@/lib/db/issues";
 import { formatApiError } from "@/lib/form-storage";
 import { runInspectionCapture } from "@/lib/inspect/run-capture";
 import { parseFigmaUrl } from "@/lib/figma/client";
@@ -10,6 +11,25 @@ const adjustmentsSchema = z
     hideSelectors: z.union([z.string(), z.array(z.string())]).optional(),
     siteCropTop: z.number().int().min(0).optional(),
     siteCropBottom: z.number().int().min(0).optional(),
+  })
+  .optional();
+
+const siteAuthSchema = z
+  .object({
+    wordpress: z
+      .object({
+        username: z.string().min(1),
+        password: z.string().min(1),
+        loginUrl: z.string().url().optional(),
+      })
+      .optional(),
+    httpBasic: z
+      .object({
+        username: z.string().min(1),
+        password: z.string().min(1),
+      })
+      .optional(),
+    cookies: z.string().optional(),
   })
   .optional();
 
@@ -25,6 +45,7 @@ const bodySchema = z.object({
   timezoneId: z.string().optional(),
   mobileAdjustments: adjustmentsSchema,
   desktopAdjustments: adjustmentsSchema,
+  siteAuth: siteAuthSchema,
 });
 
 function formatZodError(error: z.ZodError): string {
@@ -68,7 +89,15 @@ export async function POST(request: Request) {
       timezoneId: data.timezoneId,
       mobileAdjustments: parseAdjustmentsInput(data.mobileAdjustments),
       desktopAdjustments: parseAdjustmentsInput(data.desktopAdjustments),
+      siteAuth: data.siteAuth,
     });
+
+    try {
+      const saved = await getIssuesForUrl(data.websiteUrl);
+      if (saved.length > 0) session.issues = saved;
+    } catch (err) {
+      console.warn("[inspect] failed to load saved issues:", err);
+    }
 
     return NextResponse.json(session);
   } catch (err) {

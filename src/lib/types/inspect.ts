@@ -62,6 +62,8 @@ export type FlaggedIssue = {
   actual: string;
   notes: string;
   anchor: { x: number; y: number; width: number; height: number };
+  resolved?: boolean;
+  resolvedAt?: string | null;
 };
 
 export type InspectionSession = {

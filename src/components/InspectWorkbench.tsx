@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { compareMetrics } from "@/lib/inspect/compare-metrics";
 import { DESKTOP_DEFAULT_WIDTH } from "@/lib/inspect/constants";
+import { IssueLightbox } from "./IssueLightbox";
 import {
   hitTestElement,
   rectToPercentAnchor,
@@ -43,6 +44,8 @@ export function InspectWorkbench({ session, onUpdate }: Props) {
   const [flagActual, setFlagActual] = useState("");
   const [flagCategory, setFlagCategory] = useState<IssueCategory>("spacing");
   const [flagNotes, setFlagNotes] = useState("");
+  const [onlyCurrentBreakpoint, setOnlyCurrentBreakpoint] = useState(false);
+  const [openIssueId, setOpenIssueId] = useState<string | null>(null);
 
   const bp = session.breakpoints.find((b) => b.width === activeWidth) ?? session.breakpoints[0];
 
@@ -89,7 +92,9 @@ export function InspectWorkbench({ session, onUpdate }: Props) {
     const box = e.currentTarget.getBoundingClientRect();
     const xPx = ((e.clientX - box.left) / box.width) * fw;
     const yPx = ((e.clientY - box.top) / box.height) * fh;
-    const hit = hitTestElement(bp.figmaElements ?? [], xPx, yPx);
+    const hit = hitTestElement(bp.figmaElements ?? [], xPx, yPx, {
+      preferSection: !e.shiftKey,
+    });
     selectFigma(hit);
   }
 
@@ -98,7 +103,7 @@ export function InspectWorkbench({ session, onUpdate }: Props) {
     const box = e.currentTarget.getBoundingClientRect();
     const xPx = ((e.clientX - box.left) / box.width) * bp.viewportWidth;
     const yPx = ((e.clientY - box.top) / box.height) * bp.viewportHeight;
-    const hit = hitTestElement(bp.elements, xPx, yPx);
+    const hit = hitTestElement(bp.elements, xPx, yPx, { preferSection: !e.shiftKey });
     selectSite(hit);
   }
 
@@ -123,8 +128,31 @@ export function InspectWorkbench({ session, onUpdate }: Props) {
     }
   }
 
+  const flagDisabledReason = (() => {
+    if (!bp) return "No breakpoint";
+    if (!siteSelected) return "Click an element on the live site first";
+    return null;
+  })();
+
+  function defaultPropertyForCategory(cat: IssueCategory): string {
+    switch (cat) {
+      case "spacing":
+        return "padding-top";
+      case "typography":
+        return "font-size";
+      case "image":
+        return "size";
+      case "layout":
+        return "size";
+      default:
+        return "general";
+    }
+  }
+
   function addFlag() {
-    if (!siteSelected || !bp || !flagProperty.trim()) return;
+    if (!siteSelected || !bp) return;
+
+    const property = flagProperty.trim() || defaultPropertyForCategory(flagCategory);
 
     const issue: FlaggedIssue = {
       id: `issue_${Date.now()}`,
@@ -135,7 +163,7 @@ export function InspectWorkbench({ session, onUpdate }: Props) {
       elementLabel: siteSelected.label,
       elementKind: siteSelected.kind,
       category: flagCategory,
-      property: flagProperty.trim(),
+      property,
       expected: flagExpected.trim(),
       actual: flagActual.trim(),
       notes: flagNotes.trim(),
@@ -147,7 +175,20 @@ export function InspectWorkbench({ session, onUpdate }: Props) {
       issues: [...session.issues, issue],
     });
 
+    setFlagProperty("");
+    setFlagExpected("");
+    setFlagActual("");
     setFlagNotes("");
+
+    fetch("/api/issues", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        websiteUrl: session.websiteUrl,
+        sessionId: session.id,
+        issue,
+      }),
+    }).catch((err) => console.warn("Failed to persist issue:", err));
   }
 
   function removeFlag(id: string) {
@@ -155,11 +196,35 @@ export function InspectWorkbench({ session, onUpdate }: Props) {
       ...session,
       issues: session.issues.filter((i) => i.id !== id),
     });
+    if (openIssueId === id) setOpenIssueId(null);
+
+    fetch(`/api/issues/${encodeURIComponent(id)}`, { method: "DELETE" }).catch((err) =>
+      console.warn("Failed to delete persisted issue:", err)
+    );
+  }
+
+  function toggleResolved(issue: FlaggedIssue) {
+    const next: FlaggedIssue = {
+      ...issue,
+      resolved: !issue.resolved,
+      resolvedAt: !issue.resolved ? new Date().toISOString() : null,
+    };
+    onUpdate({
+      ...session,
+      issues: session.issues.map((i) => (i.id === issue.id ? next : i)),
+    });
+
+    fetch(`/api/issues/${encodeURIComponent(issue.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resolved: next.resolved }),
+    }).catch((err) => console.warn("Failed to update issue:", err));
   }
 
   if (!bp) return null;
 
   const bpIssues = session.issues.filter((i) => i.breakpointWidth === bp.width);
+  const visibleIssues = onlyCurrentBreakpoint ? bpIssues : session.issues;
   const figmaElements = bp.figmaElements ?? [];
 
   return (
@@ -203,8 +268,10 @@ export function InspectWorkbench({ session, onUpdate }: Props) {
       </div>
 
       <p className={styles.hint}>
-        Select matching sections on Figma and the live site — differing metrics highlight in
-        yellow. Flag issues on the site only.
+        Click selects the <strong>smallest containing layout block</strong> (section) for spacing.
+        <strong> Shift+click</strong> picks the deepest element (text, image, inner frame) for
+        typography or asset size. Re-capture after updating the app so Figma/site element lists
+        refresh.
       </p>
 
       <div className={styles.grid}>
@@ -250,16 +317,21 @@ export function InspectWorkbench({ session, onUpdate }: Props) {
               {session.issues
                 .filter((i) => i.breakpointWidth === bp.width)
                 .map((issue) => (
-                  <div
+                  <button
                     key={issue.id}
-                    className={styles.flaggedHighlight}
+                    type="button"
+                    className={`${styles.flaggedHighlight} ${issue.resolved ? styles.flaggedResolved : ""}`}
                     style={{
                       left: `${issue.anchor.x}%`,
                       top: `${issue.anchor.y}%`,
                       width: `${issue.anchor.width}%`,
                       height: `${issue.anchor.height}%`,
                     }}
-                    title={issue.property}
+                    title={`${issue.property} — click to view`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenIssueId(issue.id);
+                    }}
                   />
                 ))}
             </div>
@@ -366,9 +438,18 @@ export function InspectWorkbench({ session, onUpdate }: Props) {
                         placeholder="optional context"
                       />
                     </label>
-                    <button type="button" className={styles.flagBtn} onClick={addFlag}>
+                    <button
+                      type="button"
+                      className={styles.flagBtn}
+                      onClick={addFlag}
+                      disabled={Boolean(flagDisabledReason)}
+                      title={flagDisabledReason ?? "Add flagged issue"}
+                    >
                       Add flagged issue
                     </button>
+                    {flagDisabledReason && (
+                      <p className={styles.flagHint}>{flagDisabledReason}</p>
+                    )}
                   </section>
                 </section>
               )}
@@ -377,43 +458,101 @@ export function InspectWorkbench({ session, onUpdate }: Props) {
         </aside>
       </div>
 
-      {bpIssues.length > 0 && (
+      {session.issues.length > 0 ? (
         <section className={styles.issueList}>
-          <h3>Flagged issues — {bp.label}</h3>
+          <header className={styles.issueListHeader}>
+            <h3>
+              Flagged issues
+              <span className={styles.issueCount}>
+                {visibleIssues.length} of {session.issues.length}
+              </span>
+            </h3>
+            <label className={styles.issueFilter}>
+              <input
+                type="checkbox"
+                checked={onlyCurrentBreakpoint}
+                onChange={(e) => setOnlyCurrentBreakpoint(e.target.checked)}
+              />
+              Only {bp.label}
+            </label>
+          </header>
           <table>
             <thead>
               <tr>
+                <th>Status</th>
+                <th>Breakpoint</th>
                 <th>Element</th>
+                <th>Category</th>
                 <th>Property</th>
                 <th>Expected</th>
                 <th>Actual</th>
-                <th></th>
+                <th>Notes</th>
               </tr>
             </thead>
             <tbody>
-              {bpIssues.map((issue) => (
-                <tr key={issue.id}>
+              {visibleIssues.map((issue) => (
+                <tr
+                  key={issue.id}
+                  className={[
+                    styles.issueRow,
+                    issue.resolved ? styles.issueRowResolved : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={() => setOpenIssueId(issue.id)}
+                >
+                  <td>
+                    <span
+                      className={
+                        issue.resolved ? styles.statusResolved : styles.statusOpen
+                      }
+                    >
+                      {issue.resolved ? "Resolved" : "Open"}
+                    </span>
+                  </td>
+                  <td className={styles.issueBreakpoint}>{issue.breakpointLabel}</td>
                   <td>{issue.elementLabel}</td>
+                  <td>{issue.category}</td>
                   <td>
                     <code>{issue.property}</code>
                   </td>
                   <td>{issue.expected || "—"}</td>
                   <td>{issue.actual || "—"}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className={styles.removeBtn}
-                      onClick={() => removeFlag(issue.id)}
-                    >
-                      Remove
-                    </button>
+                  <td className={styles.issueNotes} title={issue.notes}>
+                    {issue.notes
+                      ? issue.notes.length > 60
+                        ? `${issue.notes.slice(0, 60)}…`
+                        : issue.notes
+                      : "—"}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </section>
+      ) : (
+        <section className={styles.issueList}>
+          <h3>Flagged issues</h3>
+          <p className={styles.empty}>
+            No issues flagged yet. Select an element on the live site and use{" "}
+            <strong>Add flagged issue</strong>.
+          </p>
+        </section>
       )}
+
+      {openIssueId &&
+        (() => {
+          const issue = session.issues.find((i) => i.id === openIssueId);
+          if (!issue) return null;
+          return (
+            <IssueLightbox
+              issue={issue}
+              onClose={() => setOpenIssueId(null)}
+              onToggleResolved={toggleResolved}
+              onDelete={(i) => removeFlag(i.id)}
+            />
+          );
+        })()}
     </div>
   );
 }

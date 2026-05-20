@@ -1,7 +1,9 @@
 import fs from "fs/promises";
 import path from "path";
 import sharp from "sharp";
+import { obtainAuthCookies, type SiteAuthConfig } from "@/lib/capture/auth";
 import { adjustmentsToCaptureOptions } from "@/lib/capture/adjustments";
+import type { CaptureOptions } from "@/lib/capture/options";
 import {
   captureForInspect,
   closeBrowser,
@@ -25,7 +27,21 @@ export type InspectCaptureConfig = {
   timezoneId?: string;
   mobileAdjustments?: SiteAdjustments;
   desktopAdjustments?: SiteAdjustments;
+  siteAuth?: SiteAuthConfig;
 };
+
+function buildCaptureOptions(
+  adjustments: SiteAdjustments | undefined,
+  localeBase: Pick<CaptureOptions, "locale" | "acceptLanguage" | "timezoneId">,
+  authCookies?: CaptureOptions["authCookies"],
+  siteAuth?: SiteAuthConfig
+): CaptureOptions {
+  return {
+    ...adjustmentsToCaptureOptions(adjustments, localeBase),
+    authCookies,
+    siteAuth,
+  };
+}
 
 const RESPONSIVE_WIDTHS = [768, 1024, 1280, DESKTOP_DEFAULT_WIDTH];
 
@@ -64,6 +80,11 @@ export async function runInspectionCapture(
   const breakpoints: InspectBreakpoint[] = [];
   const browser = await launchBrowser();
 
+  let authCookies: CaptureOptions["authCookies"];
+  if (config.siteAuth) {
+    authCookies = await obtainAuthCookies(browser, config.websiteUrl, config.siteAuth);
+  }
+
   try {
     for (const width of widths) {
       const isMobile = width === mobileWidth;
@@ -78,7 +99,7 @@ export async function runInspectionCapture(
           config.websiteUrl,
           width,
           frameHeight,
-          adjustmentsToCaptureOptions(adjustments, localeBase)
+          buildCaptureOptions(adjustments, localeBase, authCookies, config.siteAuth)
         ),
       ]);
 

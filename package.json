@@ -9,9 +9,11 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "playwright install chromium",
-    "setup:browsers": "playwright install chromium"
+    "setup:browsers": "playwright install chromium",
+    "db:setup": "node --env-file=.env.local scripts/db-bootstrap.mjs"
   },
   "dependencies": {
+    "mysql2": "^3.22.3",
     "next": "^15.3.2",
     "pixelmatch": "^7.1.0",
     "playwright": "^1.52.0",
