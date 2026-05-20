@@ -47,6 +47,18 @@ Defaults to `en-US` + US geolocation. Use your English URL path (e.g. `/en-us/`)
 
 Preview links with a valid nonce sometimes work with **None** auth; drafts that redirect to login need WordPress login or cookies.
 
+## Production deploy (AWS App Runner)
+
+Pushes to `main` build a Docker image and push to ECR (`figmacomparer:latest` in `us-east-2`).
+
+**If [figmacompare.rossvideo.app](https://figmacompare.rossvideo.app/) looks stale after a push:**
+
+1. **App Runner must redeploy** — the workflow only updates ECR unless `APP_RUNNER_SERVICE_ARN` is set as a GitHub Actions secret. Then each push runs `aws apprunner start-deployment`.
+2. **Or manually:** AWS Console → App Runner → your service → **Deploy** → deploy latest image.
+3. **Hard-refresh** the browser (`Cmd+Shift+R`) to avoid cached JS.
+
+**MySQL on production:** set `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` (and optionally `MYSQL_PORT`) in the App Runner service **Environment variables**. Without these, flagged issues work in-session only (not persisted across captures).
+
 ## Persisting flagged issues (MySQL)
 
 Set the `MYSQL_*` variables in `.env` to enable per-URL issue history:
